@@ -42,6 +42,7 @@ interface ApiInterface {
   checkOllamaStatus: () => Promise<void>;
   onOllamaStatus: (callback: (event: Electron.IpcRendererEvent, status: OllamaStatus) => void) => void;
   installOllama: () => Promise<void>;
+  getAvailableModels: () => Promise<string[]>;
 }
 
 const api: ApiInterface = {
@@ -50,11 +51,11 @@ const api: ApiInterface = {
   getSessions: () => ipcRenderer.invoke('getSessions'),
   checkOllamaStatus: () => ipcRenderer.invoke('checkOllamaStatus'),
   onOllamaStatus: (callback) => ipcRenderer.on('ollamaStatus', callback),
-  installOllama: () => ipcRenderer.invoke('installOllama')
+  installOllama: () => ipcRenderer.invoke('installOllama'),
+  getAvailableModels: () => ipcRenderer.invoke('getAvailableModels'),
 };
 
 contextBridge.exposeInMainWorld('api', api);
-
 
 declare global {
   interface Window {

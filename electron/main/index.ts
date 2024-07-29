@@ -137,7 +137,7 @@ app.on('activate', () => {
 
 app.on('before-quit', () => {
   if (ollamaProcess) {
-      ollamaProcess.kill();
+    ollamaProcess.kill();
   }
 });
 
@@ -192,6 +192,22 @@ ipcMain.handle('installOllama', () => {
   shell.openExternal('https://ollama.ai/download');
 });
 
+async function getAvailableModels() {
+  try {
+    const models = (await ollama.list())['models'];
+    console.log(models);
+    return models.map(model => model.name);
+
+  } catch (error) {
+    console.error('Errore nel recupero dei modelli:', error);
+    return [];
+  }
+}
+
+// Aggiungi questo handler IPC
+ipcMain.handle('getAvailableModels', async () => {
+  return await getAvailableModels();
+});
 
 function checkOllamaStatus() {
   exec('ollama --version', (error, stdout, stderr) => {
