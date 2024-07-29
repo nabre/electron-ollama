@@ -1,3 +1,4 @@
+import { Button, TextInput } from 'flowbite-react';
 import React, { useState } from 'react';
 
 interface Session {
@@ -24,33 +25,32 @@ function SessionManager({ sessions, currentSession, setCurrentSession, onCreateS
   };
 
   return (
-    <div className="p-4 bg-white shadow-md">
-      <div className="flex items-center mb-4 space-x-4">
-        <input
-          type="text"
-          value={newSessionName}
-          onChange={(e) => setNewSessionName(e.target.value)}
-          placeholder="Nome nuova sessione"
-          className="flex-grow p-2 border border-gray-300 rounded"
-        />
-        <button 
-          onClick={handleCreateSession}
-          className="px-4 py-2 font-bold text-white bg-green-500 rounded hover:bg-green-600"
-        >
+    <div className="flex flex-col gap-4 p-2 bg-white shadow-md verflow-auto ">
+      <div className='flex gap-2'>
+        <div>
+          <input
+            value={newSessionName}
+            onChange={(e) => setNewSessionName(e.target.value)}
+            placeholder="Nome nuova sessione"
+            className='max-w-full '
+          />
+        </div>
+        <Button onClick={handleCreateSession} >
           Crea Sessione
-        </button>
+        </Button>
       </div>
-      <div className="flex flex-wrap gap-2">
+
+
+      <div className="flex flex-col flex-wrap gap-2 overflow-auto">
         {sessions.map(session => (
-          <div 
-            key={session.id} 
-            className={`p-2 rounded cursor-pointer ${
-              currentSession?.id === session.id ? 'bg-blue-500 text-white' : 'bg-gray-200 hover:bg-gray-300'
-            }`}
+          <div
+            key={session.id}
+            className={`p-2 rounded cursor-pointer ${currentSession?.id === session.id ? 'bg-blue-500 text-white' : 'bg-gray-200 hover:bg-gray-300'
+              }`}
             onClick={() => setCurrentSession(session)}
           >
             {session.name}
-            <button 
+            <button
               onClick={(e) => {
                 e.stopPropagation();
                 onDeleteSession(session.id);

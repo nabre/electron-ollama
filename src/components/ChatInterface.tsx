@@ -131,8 +131,8 @@ function ChatInterface({ currentSession, sendMessage, getAvailableModels }: Chat
   };
 
   return (
-    <div className="flex flex-col flex-grow p-4 bg-white rounded-lg shadow-lg">
-      <div className="flex-grow mb-4 space-y-4 overflow-y-auto">
+    <div className="flex flex-col flex-grow p-4 overflow-auto bg-white rounded-lg shadow-lg">
+      <div className="flex-grow mb-4 space-y-4 overflow-auto">
         {messages.map(renderMessage)}
         <div ref={messagesEndRef} />
       </div>

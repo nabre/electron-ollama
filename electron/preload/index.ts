@@ -22,7 +22,7 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   // You can expose other APTs you need here.
   // ...
 })
-
+/*
 contextBridge.exposeInMainWorld('api', {
   getSessions: () => ipcRenderer.invoke('getSessions'),
   createSession: (name: string) => ipcRenderer.invoke('createSession', name),
@@ -32,7 +32,24 @@ contextBridge.exposeInMainWorld('api', {
   getAvailableModels: () => ipcRenderer.invoke('getAvailableModels'),
   generate: (sessionId: string, model: string, prompt: string) => ipcRenderer.invoke('generate', sessionId, model, prompt),
 });
-
+*/
+contextBridge.exposeInMainWorld('api', {
+  getSessions: () => ipcRenderer.invoke('getSessions'),
+  createSession: (name: string) => ipcRenderer.invoke('createSession', name),
+  deleteSession: (id: string) => ipcRenderer.invoke('deleteSession', id),
+  getMessages: (sessionId: string) => ipcRenderer.invoke('getMessages', sessionId),
+  addMessage: (sessionId: string, message: any) => ipcRenderer.invoke('addMessage', sessionId, message),
+  getAvailableModels: () => ipcRenderer.invoke('getAvailableModels'),
+  generate: (sessionId: string, model: string, prompt: string) => ipcRenderer.invoke('generate', sessionId, model, prompt),
+  checkOllamaStatus: () => ipcRenderer.invoke('checkOllamaStatus'),
+  installOllama: () => ipcRenderer.invoke('installOllama'),
+  onOllamaStatus: (callback: (status: any) => void) => {
+    ipcRenderer.on('ollamaStatus', (_, status) => callback(status));
+  },
+  removeOllamaStatusListener: () => {
+    ipcRenderer.removeAllListeners('ollamaStatus');
+  }
+});
 // --------- Preload scripts loading ---------
 function domReady(condition: DocumentReadyState[] = ['complete', 'interactive']) {
   return new Promise(resolve => {

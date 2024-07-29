@@ -1,13 +1,17 @@
-import { app, BrowserWindow, Menu, ipcMain } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain, shell, dialog } from 'electron';
 import * as path from 'path';
 import { fileURLToPath } from 'node:url'
 import * as url from 'url';
 import Store from 'electron-store';
 import { Ollama } from 'ollama';
 import { update } from './update'
+import os from 'node:os'
+import { exec, spawn } from 'child_process';
 
 const ollama = new Ollama();
 const store = new Store();
+let ollamaProcess = null;
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 process.env.APP_ROOT = path.join(__dirname, '../..')
@@ -20,7 +24,7 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 const preload = path.join(__dirname, '../preload/index.mjs')
 const indexHtml = path.join(RENDERER_DIST, 'index.html')
 
-let mainWindow: BrowserWindow | null;
+let win: BrowserWindow | null;
 
 interface Message {
   id: number;
@@ -37,9 +41,11 @@ interface Session {
 }
 
 function createWindow() {
-  mainWindow = new BrowserWindow({
+  win = new BrowserWindow({
     width: 1100,
     height: 700,
+    minWidth: 800,
+    minHeight: 600,
     icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
     backgroundColor: '#ffffff',
     webPreferences: {
@@ -52,19 +58,19 @@ function createWindow() {
   Menu.setApplicationMenu(null)
 
   if (VITE_DEV_SERVER_URL) { // #298
-    mainWindow.loadURL(VITE_DEV_SERVER_URL)
+    win.loadURL(VITE_DEV_SERVER_URL)
     // Open devTool if the app is not packaged
-    mainWindow.webContents.openDevTools()
+    win.webContents.openDevTools()
   } else {
-    mainWindow.loadFile(indexHtml)
+    win.loadFile(indexHtml)
   }
 
-  mainWindow.on('closed', () => {
-    mainWindow = null;
+  win.on('closed', () => {
+    win = null;
   });
 
   // Auto update
-  update(mainWindow)
+  update(win)
 }
 
 app.on('ready', createWindow);
@@ -76,7 +82,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('activate', () => {
-  if (mainWindow === null) {
+  if (win === null) {
     createWindow();
   }
 });
@@ -159,6 +165,83 @@ ipcMain.handle('generate', async (event, sessionId: string, model: string, promp
     return null;
   }
 });
+
+const checkOllamaStatus = async () => {
+  exec('ollama --version', (error, stdout, stderr) => {
+    if (error) {
+      handleOllamaNotInstalled();
+      return;
+    }
+
+    ollama.list()
+      .then(() => {
+        mainWindow?.webContents.send('ollamaStatus', { status: 'active', version: stdout.trim() });
+      })
+      .catch((err) => {
+        startOllama();
+      });
+  });
+}
+
+function handleOllamaNotInstalled() {
+  dialog.showMessageBox(mainWindow!, {
+    type: 'error',
+    title: 'Ollama non installato',
+    message: 'Ollama non sembra essere installato. Vuoi aprire la pagina di installazione?',
+    buttons: ['Sì', 'No']
+  }).then(result => {
+    if (result.response === 0) {
+      shell.openExternal('https://ollama.ai/download');
+    }
+  });
+  mainWindow?.webContents.send('ollamaStatus', { status: 'not-installed' });
+}
+
+function startOllama() {
+  const platform = os.platform();
+  let command: string;
+  let args: string[];
+
+  switch (platform) {
+    case 'win32':
+      command = 'ollama.exe';
+      args = ['serve'];      
+      break;
+    case 'darwin':
+    case 'linux':
+      command = 'ollama';
+      args = ['serve'];
+      break;
+    default:
+      dialog.showErrorBox('Errore', 'Sistema operativo non supportato');
+      return;
+  }
+
+  ollamaProcess = spawn(command, args);
+
+  ollamaProcess.stdout.on('data', (data: Buffer) => {
+    console.log(`Ollama output: ${data.toString()}`);
+  });
+
+  ollamaProcess.stderr.on('data', (data: Buffer) => {
+    console.error(`Ollama error: ${data.toString()}`);
+  });
+
+  ollamaProcess.on('close', (code: number) => {
+    console.log(`Ollama process exited with code ${code}`);
+  });
+
+  setTimeout(() => {
+    checkOllamaStatus();
+  }, 2000);
+}
+
+ipcMain.handle('checkOllamaStatus', checkOllamaStatus);
+
+ipcMain.handle('installOllama', () => {
+  shell.openExternal('https://ollama.ai/download');
+});
+
 /*
 
 import { app, BrowserWindow, shell, ipcMain, Menu, dialog } from 'electron'

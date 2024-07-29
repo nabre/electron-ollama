@@ -1,27 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import SessionManager from './SessionManager';
 import ChatInterface from './ChatInterface';
-
-interface Message {
-  id: number;
-  text: string;
-  sender: 'user' | 'ollama';
-  timestamp: string;
-  model: string;
-}
-
-interface Session {
-  id: string;
-  name: string;
-  messages: Message[];
-}
+import OllamaCheck from './OllamaCheck';
+import { Session, Message, OllamaStatus } from './types';
 
 function OllamaInterface() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
+  const [ollamaStatus, setOllamaStatus] = useState<OllamaStatus>({ status: 'inactive' });
 
   useEffect(() => {
     loadSessions();
+    window.api.checkOllamaStatus();
+
+    const handleOllamaStatus = (status: OllamaStatus) => {
+      setOllamaStatus(status);
+    };
+
+    window.api.onOllamaStatus(handleOllamaStatus);
+
+    return () => {
+      window.api.removeOllamaStatusListener();
+    };
   }, []);
 
   const loadSessions = async () => {
@@ -68,8 +68,20 @@ function OllamaInterface() {
     }
   };
 
+  const handleInstallOllama = () => {
+    window.api.installOllama();
+  };
+
   return (
     <div className="flex flex-col h-screen bg-gray-100">
+      <div className="p-4 bg-white shadow-md">
+        <OllamaCheck
+          status={ollamaStatus.status}
+          version={ollamaStatus.version}
+          onInstall={handleInstallOllama}
+        />
+      </div>
+      <div className='flex overflow-auto grow'>
       <SessionManager
         sessions={sessions}
         currentSession={currentSession}
@@ -81,7 +93,9 @@ function OllamaInterface() {
         currentSession={currentSession}
         sendMessage={handleSendMessage}
         getAvailableModels={window.api.getAvailableModels}
-      />
+      />        
+      </div>
+
     </div>
   );
 }
