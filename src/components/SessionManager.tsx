@@ -1,13 +1,19 @@
 import React, { useState } from 'react';
 
-interface SessionManagerProps {
-  sessions: string[];
-  currentSession: string | null;
-  setCurrentSession: (session: string) => void;
-  onCreateSession: (sessionName: string) => void;
+interface Session {
+  id: string;
+  name: string;
 }
 
-function SessionManager({ sessions, currentSession, setCurrentSession, onCreateSession }: SessionManagerProps) {
+interface SessionManagerProps {
+  sessions: Session[];
+  currentSession: Session | null;
+  setCurrentSession: (session: Session | null) => void;
+  onCreateSession: (name: string) => void;
+  onDeleteSession: (id: string) => void;
+}
+
+function SessionManager({ sessions, currentSession, setCurrentSession, onCreateSession, onDeleteSession }: SessionManagerProps) {
   const [newSessionName, setNewSessionName] = useState('');
 
   const handleCreateSession = () => {
@@ -19,17 +25,7 @@ function SessionManager({ sessions, currentSession, setCurrentSession, onCreateS
 
   return (
     <div className="p-4 bg-white shadow-md">
-      <div className="flex items-center space-x-4">
-        <select
-          value={currentSession || ''}
-          onChange={(e) => setCurrentSession(e.target.value)}
-          className="flex-grow p-2 border border-gray-300 rounded"
-        >
-          <option value="">Seleziona una sessione</option>
-          {sessions.map(session => (
-            <option key={session} value={session}>{session}</option>
-          ))}
-        </select>
+      <div className="flex items-center mb-4 space-x-4">
         <input
           type="text"
           value={newSessionName}
@@ -43,6 +39,28 @@ function SessionManager({ sessions, currentSession, setCurrentSession, onCreateS
         >
           Crea Sessione
         </button>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {sessions.map(session => (
+          <div 
+            key={session.id} 
+            className={`p-2 rounded cursor-pointer ${
+              currentSession?.id === session.id ? 'bg-blue-500 text-white' : 'bg-gray-200 hover:bg-gray-300'
+            }`}
+            onClick={() => setCurrentSession(session)}
+          >
+            {session.name}
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeleteSession(session.id);
+              }}
+              className="ml-2 text-red-500 hover:text-red-700"
+            >
+              X
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );

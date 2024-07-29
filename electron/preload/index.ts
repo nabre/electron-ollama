@@ -23,45 +23,15 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   // ...
 })
 
-
-interface OllamaStatus {
-  status: 'active' | 'inactive' | 'not-installed';
-  version?: string;
-}
-
-interface GenerateParams {
-  sessionName: string;
-  model: string;
-  prompt: string;
-}
-
-interface ApiInterface {
-  createSession: (sessionName: string) => Promise<string>;
-  generate: (sessionName: string, model: string, prompt: string) => Promise<string>;
-  getSessions: () => Promise<string[]>;
-  checkOllamaStatus: () => Promise<void>;
-  onOllamaStatus: (callback: (event: Electron.IpcRendererEvent, status: OllamaStatus) => void) => void;
-  installOllama: () => Promise<void>;
-  getAvailableModels: () => Promise<string[]>;
-}
-
-const api: ApiInterface = {
-  createSession: (sessionName) => ipcRenderer.invoke('createSession', sessionName),
-  generate: (sessionName, model, prompt) => ipcRenderer.invoke('generate', { sessionName, model, prompt } as GenerateParams),
+contextBridge.exposeInMainWorld('api', {
   getSessions: () => ipcRenderer.invoke('getSessions'),
-  checkOllamaStatus: () => ipcRenderer.invoke('checkOllamaStatus'),
-  onOllamaStatus: (callback) => ipcRenderer.on('ollamaStatus', callback),
-  installOllama: () => ipcRenderer.invoke('installOllama'),
+  createSession: (name: string) => ipcRenderer.invoke('createSession', name),
+  deleteSession: (id: string) => ipcRenderer.invoke('deleteSession', id),
+  getMessages: (sessionId: string) => ipcRenderer.invoke('getMessages', sessionId),
+  addMessage: (sessionId: string, message: any) => ipcRenderer.invoke('addMessage', sessionId, message),
   getAvailableModels: () => ipcRenderer.invoke('getAvailableModels'),
-};
-
-contextBridge.exposeInMainWorld('api', api);
-
-declare global {
-  interface Window {
-    api: ApiInterface;
-  }
-}
+  generate: (sessionId: string, model: string, prompt: string) => ipcRenderer.invoke('generate', sessionId, model, prompt),
+});
 
 // --------- Preload scripts loading ---------
 function domReady(condition: DocumentReadyState[] = ['complete', 'interactive']) {

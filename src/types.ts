@@ -1,19 +1,18 @@
+export interface Message {
+  id: number;
+  text: string;
+  sender: 'user' | 'ollama';
+  timestamp: string;
+  model: string;
+}
+
+export interface Session {
+  id: string;
+  name: string;
+  messages: Message[];
+}
+
 export interface OllamaStatus {
-    status: 'active' | 'inactive' | 'not-installed';
-    version?: string;
-  }
-  
-  export interface ApiInterface {
-    createSession: (sessionName: string) => Promise<string>;
-    generate: (sessionName: string, model: string, prompt: string) => Promise<string>;
-    getSessions: () => Promise<string[]>;
-    checkOllamaStatus: () => Promise<void>;
-    onOllamaStatus: (callback: (event: Electron.IpcRendererEvent, status: OllamaStatus) => void) => void;
-    installOllama: () => Promise<void>;
-  }
-  
-  declare global {
-    interface Window {
-      api: ApiInterface;
-    }
-  }
+  status: 'active' | 'inactive' | 'not-installed';
+  version?: string;
+}

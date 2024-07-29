@@ -1,4 +1,3 @@
-import React from 'react';
 import OllamaInterface from './components/OllamaInterface';
 
 function App() {

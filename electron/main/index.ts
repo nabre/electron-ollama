@@ -1,5 +1,168 @@
+import { app, BrowserWindow, Menu, ipcMain } from 'electron';
+import * as path from 'path';
+import { fileURLToPath } from 'node:url'
+import * as url from 'url';
+import Store from 'electron-store';
+import { Ollama } from 'ollama';
+import { update } from './update'
+
+const ollama = new Ollama();
+const store = new Store();
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+process.env.APP_ROOT = path.join(__dirname, '../..')
+export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
+export const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
+process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
+  ? path.join(process.env.APP_ROOT, 'public')
+  : RENDERER_DIST
+
+const preload = path.join(__dirname, '../preload/index.mjs')
+const indexHtml = path.join(RENDERER_DIST, 'index.html')
+
+let mainWindow: BrowserWindow | null;
+
+interface Message {
+  id: number;
+  text: string;
+  sender: 'user' | 'ollama';
+  timestamp: string;
+  model: string;
+}
+
+interface Session {
+  id: string;
+  name: string;
+  messages: Message[];
+}
+
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1100,
+    height: 700,
+    icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
+    backgroundColor: '#ffffff',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload
+    }
+  });
+
+  Menu.setApplicationMenu(null)
+
+  if (VITE_DEV_SERVER_URL) { // #298
+    mainWindow.loadURL(VITE_DEV_SERVER_URL)
+    // Open devTool if the app is not packaged
+    mainWindow.webContents.openDevTools()
+  } else {
+    mainWindow.loadFile(indexHtml)
+  }
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+
+  // Auto update
+  update(mainWindow)
+}
+
+app.on('ready', createWindow);
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
+
+app.on('activate', () => {
+  if (mainWindow === null) {
+    createWindow();
+  }
+});
+
+// Funzioni di utilità per la gestione dei dati persistenti
+function getSessions(): Session[] {
+  return store.get('sessions', []) as Session[];
+}
+
+function saveSession(session: Session) {
+  const sessions = getSessions();
+  const index = sessions.findIndex(s => s.id === session.id);
+  if (index !== -1) {
+    sessions[index] = session;
+  } else {
+    sessions.push(session);
+  }
+  store.set('sessions', sessions);
+}
+
+function deleteSession(sessionId: string) {
+  const sessions = getSessions().filter(s => s.id !== sessionId);
+  store.set('sessions', sessions);
+}
+
+// IPC Handlers
+ipcMain.handle('getSessions', () => {
+  return getSessions();
+});
+
+ipcMain.handle('createSession', (event, sessionName: string) => {
+  const newSession: Session = {
+    id: Date.now().toString(),
+    name: sessionName,
+    messages: []
+  };
+  saveSession(newSession);
+  return newSession;
+});
+
+ipcMain.handle('deleteSession', (event, sessionId: string) => {
+  deleteSession(sessionId);
+});
+
+ipcMain.handle('getMessages', (event, sessionId: string) => {
+  const session = getSessions().find(s => s.id === sessionId);
+  return session ? session.messages : [];
+});
+
+ipcMain.handle('addMessage', (event, sessionId: string, message: Message) => {
+  const sessions = getSessions();
+  const session = sessions.find(s => s.id === sessionId);
+  if (session) {
+    session.messages.push(message);
+    saveSession(session);
+    return session.messages;
+  }
+  return null;
+});
+
+ipcMain.handle('getAvailableModels', async () => {
+  try {
+    const models = await ollama.list();
+    return models.map(model => model.name);
+  } catch (error) {
+    console.error('Errore nel recupero dei modelli:', error);
+    return [];
+  }
+});
+
+ipcMain.handle('generate', async (event, sessionId: string, model: string, prompt: string) => {
+  try {
+    const response = await ollama.generate({
+      model: model,
+      prompt: prompt
+    });
+    return response.response;
+  } catch (error) {
+    console.error('Errore nella generazione della risposta:', error);
+    return null;
+  }
+});
+/*
+
 import { app, BrowserWindow, shell, ipcMain, Menu, dialog } from 'electron'
-import fs from 'node:fs'
+import Store from 'electron-store';
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -10,7 +173,22 @@ import dbOperations from "./dbOperations"
 import { Ollama } from 'ollama';
 import { exec, spawn } from 'child_process';
 
+interface Message {
+  id: number;
+  text: string;
+  sender: 'user' | 'ollama';
+  timestamp: string;
+  model: string;
+}
+
+interface Session {
+  id: string;
+  name: string;
+  messages: Message[];
+}
+
 const ollama = new Ollama();
+const store = new Store();
 const sessions = new Map();
 
 let ollamaProcess = null;
@@ -158,6 +336,7 @@ ipcMain.handle('open-win', (_, arg) => {
   }
 })
 
+/*
 ipcMain.handle('createSession', async (event, sessionName) => {
   if (!sessions.has(sessionName)) {
     sessions.set(sessionName, []);
@@ -180,6 +359,7 @@ ipcMain.handle('generate', async (event, { sessionName, model, prompt }) => {
   }
 });
 
+/*
 ipcMain.handle('getSessions', () => {
   return Array.from(sessions.keys());
 });
@@ -204,10 +384,67 @@ async function getAvailableModels() {
   }
 }
 
-// Aggiungi questo handler IPC
+
+// Funzioni di utilità per la gestione dei dati persistenti
+function getSessions(): Session[] {
+  return store.get('sessions', []) as Session[];
+}
+
+function saveSession(session: Session) {
+  const sessions = getSessions();
+  const index = sessions.findIndex(s => s.id === session.id);
+  if (index !== -1) {
+    sessions[index] = session;
+  } else {
+    sessions.push(session);
+  }
+  store.set('sessions', sessions);
+}
+
+function deleteSession(sessionId: string) {
+  const sessions = getSessions().filter(s => s.id !== sessionId);
+  store.set('sessions', sessions);
+}
+
+// IPC Handlers
+ipcMain.handle('getSessions', () => {
+  return getSessions();
+});
+
+ipcMain.handle('createSession', (event, sessionName: string) => {
+  const newSession: Session = {
+    id: Date.now().toString(),
+    name: sessionName,
+    messages: []
+  };
+  saveSession(newSession);
+  return newSession;
+});
+
+ipcMain.handle('deleteSession', (event, sessionId: string) => {
+  deleteSession(sessionId);
+});
+
+ipcMain.handle('getMessages', (event, sessionId: string) => {
+  const session = getSessions().find(s => s.id === sessionId);
+  return session ? session.messages : [];
+});
+
+ipcMain.handle('addMessage', (event, sessionId: string, message: Message) => {
+  const sessions = getSessions();
+  const session = sessions.find(s => s.id === sessionId);
+  if (session) {
+    session.messages.push(message);
+    saveSession(session);
+    return session.messages;
+  }
+  return null;
+});
+
 ipcMain.handle('getAvailableModels', async () => {
   return await getAvailableModels();
 });
+
 
 function checkOllamaStatus() {
   exec('ollama --version', (error, stdout, stderr) => {
@@ -277,4 +514,4 @@ function startOllama() {
   setTimeout(() => {
     checkOllamaStatus();
   }, 2000);
-}
+}*/

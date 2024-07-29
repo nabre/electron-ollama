@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import  { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { User, Bot, ChevronDown } from 'lucide-react';
 
@@ -6,12 +6,18 @@ interface Message {
   id: number;
   text: string;
   sender: 'user' | 'ollama' | 'loading';
-  timestamp: Date;
-  model?: string;
+  timestamp: string;
+  model: string;
+}
+
+interface Session {
+  id: string;
+  name: string;
+  messages: Message[];
 }
 
 interface ChatInterfaceProps {
-  currentSession: string | null;
+  currentSession: Session | null;
   sendMessage: (message: string, model: string) => Promise<string | undefined>;
   getAvailableModels: () => Promise<string[]>;
 }
@@ -20,56 +26,35 @@ function ChatInterface({ currentSession, sendMessage, getAvailableModels }: Chat
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>('llama3.1');
+  const [selectedModel] = useState<string>('llama3.1');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setMessages([]);
-    loadAvailableModels();
+    if (currentSession) {
+      loadMessages();
+    } else {
+      setMessages([]);
+    }
   }, [currentSession]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const loadAvailableModels = async () => {
-    try {
-      const models = await getAvailableModels();
-      setAvailableModels(models);
-      if (models.length > 0) {
-       setSelectedModel(models[0]);
-      }
-    } catch (error) {
-      console.error('Error loading available models:', error);
+  const loadMessages = async () => {
+    if (currentSession) {
+      const loadedMessages = await window.api.getMessages(currentSession.id);
+      setMessages(loadedMessages);
     }
   };
 
   const handleSendMessage = async () => {
     if (input.trim() && currentSession && selectedModel) {
-      const userMessage: Message = { id: Date.now(), text: input, sender: 'user', timestamp: new Date(), model: selectedModel };
-      setMessages(prev => [...prev, userMessage]);
-      setInput('');
       setIsLoading(true);
-
-      const loadingMessage: Message = { id: Date.now() + 1, text: '', sender: 'loading', timestamp: new Date() };
-      setMessages(prev => [...prev, loadingMessage]);
-
-      try {
-        const response = await sendMessage(input, selectedModel);
-        if (response) {
-          setMessages(prev => prev.filter(msg => msg.sender !== 'loading'));
-          const ollamaMessage: Message = { id: Date.now() + 2, text: response, sender: 'ollama', timestamp: new Date(), model: selectedModel };
-          setMessages(prev => [...prev, ollamaMessage]);
-        }
-      } catch (error) {
-        console.error('Error getting response:', error);
-        setMessages(prev => prev.filter(msg => msg.sender !== 'loading'));
-        const errorMessage: Message = { id: Date.now() + 2, text: "Mi dispiace, si è verificato un errore. Per favore, riprova.", sender: 'ollama', timestamp: new Date() };
-        setMessages(prev => [...prev, errorMessage]);
-      } finally {
-        setIsLoading(false);
-      }
+      const response = await sendMessage(input, selectedModel);
+      setInput('');
+      await loadMessages(); // Ricarica i messaggi dopo l'invio
+      setIsLoading(false);
     }
   };
 
@@ -84,6 +69,7 @@ function ChatInterface({ currentSession, sendMessage, getAvailableModels }: Chat
   const renderMessage = (message: Message) => {
     const isUser = message.sender === 'user';
     const isLoading = message.sender === 'loading';
+    
     return (
       <div
         key={message.id}
@@ -105,7 +91,7 @@ function ChatInterface({ currentSession, sendMessage, getAvailableModels }: Chat
                 <>
                   {message.model && (
                     <div className="mb-2 text-xs text-gray-500">
-                      Modello: {message.model}
+                      {new Date(message.timestamp).toLocaleString()}
                     </div>
                   )}
                   {isUser ? (
@@ -137,10 +123,7 @@ function ChatInterface({ currentSession, sendMessage, getAvailableModels }: Chat
                   )}
                 </>
               )}
-            </div>
-            <div className={`text-sm text-gray-500 mt-2 ${isUser ? 'text-right' : 'text-left'}`}>
-              {message.timestamp.toLocaleTimeString()}
-            </div>
+            </div>            
           </div>
         </div>
       </div>
@@ -148,49 +131,32 @@ function ChatInterface({ currentSession, sendMessage, getAvailableModels }: Chat
   };
 
   return (
-    <div className="flex flex-col flex-grow p-6 bg-white rounded-lg shadow-lg">
-      <div className="flex-grow pr-4 mb-6 overflow-y-auto">
+    <div className="flex flex-col flex-grow p-4 bg-white rounded-lg shadow-lg">
+      <div className="flex-grow mb-4 space-y-4 overflow-y-auto">
         {messages.map(renderMessage)}
         <div ref={messagesEndRef} />
       </div>
-      <div className="flex items-end pt-6 space-x-4 border-t">
-        <div className="flex flex-col flex-grow space-y-2">
-          <div >
-            <select
-              value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
-              disabled={!currentSession || isLoading}
-              className="w-full px-3 py-2 pr-8 leading-tight bg-white border border-gray-300 rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              {availableModels.map((model) => (
-                <option key={model} value={model}>{model}</option>
-              ))}
-            </select>
-            <div className="absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 pointer-events-none">
-              <ChevronDown size={20} />
-            </div>
-          </div>
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            disabled={!currentSession || isLoading}
-            className="w-full p-3 text-base border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder={currentSession ? (isLoading ? "Attendendo risposta..." : "Scrivi un messaggio...") : "Seleziona una sessione per iniziare"}
-            rows={3}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSendMessage();
-              }
-            }}
-          />
-        </div>
-        <button
+      <div className="flex items-center space-x-2">
+        
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder={currentSession ? "Scrivi un messaggio..." : "Seleziona una sessione per iniziare"}
+          className="flex-grow p-2 border border-gray-300 rounded"
+          disabled={!currentSession || isLoading}
+          onKeyPress={(e) => {
+            if (e.key === 'Enter') {
+              handleSendMessage();
+            }
+          }}
+        />
+        <button 
           onClick={handleSendMessage}
-          disabled={!currentSession || isLoading || !selectedModel}
-          className="px-6 py-3 text-base font-bold text-white transition duration-150 ease-in-out bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+          disabled={!currentSession || isLoading || !input.trim()}
+          className="px-4 py-2 font-bold text-white bg-blue-500 rounded hover:bg-blue-600 disabled:bg-gray-400"
         >
-          {isLoading ? 'Attendendo...' : 'Invia'}
+          {isLoading ? 'Invio...' : 'Invia'}
         </button>
       </div>
     </div>
