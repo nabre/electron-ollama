@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('api', {
   getMessages: (sessionId: string) => ipcRenderer.invoke('getMessages', sessionId),
   addMessage: (sessionId: string, message: any) => ipcRenderer.invoke('addMessage', sessionId, message),
   getAvailableModels: () => ipcRenderer.invoke('getAvailableModels'),
+  sendMessage: (sessionId: string, message: string, model: string) => ipcRenderer.invoke('sendMessage', sessionId, message, model),
   generate: (sessionId: string, model: string, prompt: string) => ipcRenderer.invoke('generate', sessionId, model, prompt),
   checkOllamaStatus: () => ipcRenderer.invoke('checkOllamaStatus'),
   installOllama: () => ipcRenderer.invoke('installOllama'),

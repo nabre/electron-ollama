@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import SessionManager from './SessionManager';
 import ChatInterface from './ChatInterface';
 import { Session } from '../types';
@@ -6,7 +6,7 @@ import { Session } from '../types';
 const showErrorNotification = (message: string, ...props: any[]) => {
   // Implementa questa funzione utilizzando il sistema di notifiche della tua scelta
   // Ad esempio, potresti usare react-toastify o un componente personalizzato
-  console.error(message,...props); // Placeholder, sostituisci con una vera implementazione
+  console.error(message, ...props); // Placeholder, sostituisci con una vera implementazione
 };
 
 const isValidSessionName = (name: string, existingSessions: Session[]): boolean => {
@@ -39,6 +39,7 @@ function OllamaInterface() {
     setCurrentSession(newSession);
   };
 
+
   const handleRenameSession = async (id: string, newName: string) => {
     if (!isValidSessionName(newName, sessions.filter(s => s.id !== id))) {
       showErrorNotification('Nome sessione non valido o già esistente.');
@@ -57,12 +58,28 @@ function OllamaInterface() {
   };
 
   const handleDeleteSession = async (id: string) => {
-    await window.api.deleteSession(id);
-    setSessions(sessions.filter(s => s.id !== id));
+    setSessions(await window.api.deleteSession(id));
     if (currentSession && currentSession.id === id) {
       setCurrentSession(null);
     }
   };
+
+  const handleSendMessage = useCallback(async (sessionId: string, message: string, model: string) => {
+
+    if (!sessionId) {
+      console.error('SessionId is undefined');
+      return;
+    }
+    try {
+      const response = await window.api.sendMessage(sessionId, message, model);
+      await loadSessions(); // Ricarica le sessioni per ottenere i messaggi aggiornati
+      return response;
+    } catch (error) {
+      console.error('Errore nell\'invio del messaggio:', error);
+      // Gestisci l'errore, ad esempio mostrando un messaggio all'utente
+    }
+  }, []);
+
 
   return (
     <div className='flex h-screen'>
@@ -74,7 +91,7 @@ function OllamaInterface() {
         onDeleteSession={handleDeleteSession}
         onRenameSession={handleRenameSession}
       />
-      <ChatInterface currentSession={currentSession} />
+      <ChatInterface currentSession={currentSession} sendMessage={handleSendMessage} />
     </div>
   );
 }

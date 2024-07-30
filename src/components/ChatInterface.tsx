@@ -1,4 +1,4 @@
-import  { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { User, Bot } from 'lucide-react';
 import { Message, Session } from '../types';
@@ -6,17 +6,16 @@ import { Message, Session } from '../types';
 
 interface ChatInterfaceProps {
   currentSession: Session | null;
-  sendMessage: (message: string, model: string) => Promise<string | undefined>;
-  getAvailableModels: () => Promise<string[]>;
+  sendMessage: (sessionId: string, message: string, model: string) => Promise<string | undefined|any>;
 }
 
-function ChatInterface({ currentSession, sendMessage, getAvailableModels }: ChatInterfaceProps) {
+function ChatInterface({ currentSession, sendMessage}: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedModel] = useState<string>('llama3.1');
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
+  
   useEffect(() => {
     if (currentSession) {
       setMessages(currentSession.messages);
@@ -91,7 +90,7 @@ function ChatInterface({ currentSession, sendMessage, getAvailableModels }: Chat
   const renderMessage = (message: Message) => {
     const isUser = message.sender === 'user';
     const isLoading = message.sender === 'loading';
-    
+
     return (
       <div
         key={message.id}
@@ -145,7 +144,7 @@ function ChatInterface({ currentSession, sendMessage, getAvailableModels }: Chat
                   )}
                 </>
               )}
-            </div>            
+            </div>
           </div>
         </div>
       </div>
@@ -158,7 +157,7 @@ function ChatInterface({ currentSession, sendMessage, getAvailableModels }: Chat
         {messages.map(renderMessage)}
         <div ref={messagesEndRef} />
       </div>
-      <div className="flex items-center space-x-2">        
+      <div className="flex items-center space-x-2">
         <input
           type="text"
           value={input}
@@ -172,7 +171,7 @@ function ChatInterface({ currentSession, sendMessage, getAvailableModels }: Chat
             }
           }}
         />
-        <button 
+        <button
           onClick={handleSendMessage}
           disabled={!currentSession || isLoading || !input.trim()}
           className="px-4 py-2 font-bold text-white bg-blue-500 rounded hover:bg-blue-600 disabled:bg-gray-400"

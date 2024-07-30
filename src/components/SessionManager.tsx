@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import  {  useState } from 'react';
 import { Button, TextInput } from 'flowbite-react';
 import { HiPlus, HiX, HiCheck, HiPencil } from 'react-icons/hi';
 import { Session } from '../types';
@@ -24,6 +24,7 @@ function SessionManager({
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
 
+  
   const handleCreateSession = () => {
     if (newSessionName.trim()) {
       onCreateSession(newSessionName);

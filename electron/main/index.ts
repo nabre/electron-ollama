@@ -7,6 +7,7 @@ import { Ollama } from 'ollama';
 import { update } from './update'
 import os from 'node:os'
 import { exec, spawn } from 'child_process';
+import { v4 as uuidv4 } from 'uuid';
 
 const ollama = new Ollama();
 const store = new Store();
@@ -37,6 +38,7 @@ interface Message {
 interface Session {
   id: string;
   name: string;
+  timestamp: string;
   messages: Message[];
 }
 
@@ -88,11 +90,27 @@ app.on('activate', () => {
 });
 
 // Funzioni di utilità per la gestione dei dati persistenti
-function getSessions(): Session[] {
-  return store.get('sessions', []) as Session[];
+
+function createDefaultSession(): Session {
+  return {
+    id: uuidv4(),
+    timestamp: Date.now().toString(),
+    name: `Sessione ${new Date().toLocaleString()}`,
+    messages: []
+  };
 }
 
-function saveSession(session: Session) {
+const getSessions = (): Session[] => {
+  let sessions = store.get('sessions', []) as Session[];
+  if (sessions.length === 0) {
+    sessions.push(createDefaultSession());
+    store.set('sessions', sessions);
+  }
+
+  return sessions;
+}
+
+const saveSession = async (session: Session) => {
   const sessions = getSessions();
   const index = sessions.findIndex(s => s.id === session.id);
   if (index !== -1) {
@@ -104,8 +122,13 @@ function saveSession(session: Session) {
 }
 
 function deleteSession(sessionId: string) {
-  const sessions = getSessions().filter(s => s.id !== sessionId);
+  let sessions = getSessions().filter(s => s.id !== sessionId);
+  if (sessions.length === 0) {
+    // Se tutte le sessioni sono state eliminate, crea una nuova sessione predefinita
+    sessions.push(createDefaultSession());
+  }
   store.set('sessions', sessions);
+  return sessions;
 }
 
 // IPC Handlers
@@ -115,13 +138,15 @@ ipcMain.handle('getSessions', () => {
 
 ipcMain.handle('createSession', (event, sessionName: string) => {
   const newSession: Session = {
-    id: Date.now().toString(),
+    id: uuidv4(),
+    timestamp: Date.now().toString(),
     name: sessionName,
     messages: []
   };
   saveSession(newSession);
   return newSession;
 });
+
 
 ipcMain.handle('renameSession', async (event, id: string, newName: string) => {
   const sessions = store.get('sessions', []) as Session[];
@@ -135,7 +160,7 @@ ipcMain.handle('renameSession', async (event, id: string, newName: string) => {
 });
 
 ipcMain.handle('deleteSession', (event, sessionId: string) => {
-  deleteSession(sessionId);
+  return deleteSession(sessionId);
 });
 
 ipcMain.handle('getMessages', (event, sessionId: string) => {
@@ -164,6 +189,56 @@ ipcMain.handle('getAvailableModels', async () => {
   }
 });
 
+ipcMain.handle('sendMessage', async (event, sessionId: string, message: string, model: string) => {
+  try {
+    // Recupera la sessione corrente
+    const sessions = getSessions();
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) {
+      throw new Error('Sessione non trovata');
+    }
+
+    // Crea il messaggio dell'utente
+    const userMessage: Message = {
+      id: Date.now(),
+      text: message,
+      sender: 'user',
+      timestamp: new Date().toISOString(),
+      model: model
+    };
+
+    // Aggiungi il messaggio dell'utente alla sessione
+    session.messages.push(userMessage);
+
+    // Invia il messaggio a Ollama e ottieni la risposta
+    const response = await ollama.generate({
+      model: model,
+      prompt: message
+    });
+
+    // Crea il messaggio di risposta di Ollama
+    const ollamaMessage: Message = {
+      id: Date.now() + 1,
+      text: response.response,
+      sender: 'ollama',
+      timestamp: new Date().toISOString(),
+      model: model
+    };
+
+    // Aggiungi il messaggio di risposta alla sessione
+    session.messages.push(ollamaMessage);
+
+    // Salva le sessioni aggiornate
+    store.set('sessions', sessions);
+
+    // Restituisci la risposta di Ollama
+    return response.response;
+  } catch (error) {
+    console.error('Errore nell\'invio del messaggio:', error);
+    throw error;
+  }
+});
+
 ipcMain.handle('generate', async (event, sessionId: string, model: string, prompt: string) => {
   try {
     const session = getSessions().find(s => s.id === sessionId);
@@ -188,20 +263,6 @@ ipcMain.handle('generate', async (event, sessionId: string, model: string, promp
   }
 });
 
-/*
-ipcMain.handle('generate', async (event, sessionId: string, model: string, prompt: string) => {
-  try {
-    const response = await ollama.generate({
-      model: model,
-      prompt: prompt
-    });
-    return response.response;
-  } catch (error) {
-    console.error('Errore nella generazione della risposta:', error);
-    return null;
-  }
-});*/
-
 const checkOllamaStatus = async () => {
   exec('ollama --version', (error, stdout, stderr) => {
     if (error) {
@@ -211,7 +272,7 @@ const checkOllamaStatus = async () => {
 
     ollama.list()
       .then(() => {
-        mainWindow?.webContents.send('ollamaStatus', { status: 'active', version: stdout.trim() });
+        win?.webContents.send('ollamaStatus', { status: 'active', version: stdout.trim() });
       })
       .catch((err) => {
         startOllama();
@@ -220,7 +281,7 @@ const checkOllamaStatus = async () => {
 }
 
 function handleOllamaNotInstalled() {
-  dialog.showMessageBox(mainWindow!, {
+  dialog.showMessageBox(win!, {
     type: 'error',
     title: 'Ollama non installato',
     message: 'Ollama non sembra essere installato. Vuoi aprire la pagina di installazione?',
@@ -230,7 +291,7 @@ function handleOllamaNotInstalled() {
       shell.openExternal('https://ollama.ai/download');
     }
   });
-  mainWindow?.webContents.send('ollamaStatus', { status: 'not-installed' });
+  win?.webContents.send('ollamaStatus', { status: 'not-installed' });
 }
 
 function startOllama() {
@@ -241,7 +302,7 @@ function startOllama() {
   switch (platform) {
     case 'win32':
       command = 'ollama.exe';
-      args = ['serve'];      
+      args = ['serve'];
       break;
     case 'darwin':
     case 'linux':
