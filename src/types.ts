@@ -1,7 +1,7 @@
 export interface Message {
   id: number;
   text: string;
-  sender: 'user' | 'ollama';
+  sender: 'user' | 'ollama' |'loading';
   timestamp: string;
   model: string;
 }

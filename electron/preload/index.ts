@@ -22,21 +22,12 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   // You can expose other APTs you need here.
   // ...
 })
-/*
+
 contextBridge.exposeInMainWorld('api', {
   getSessions: () => ipcRenderer.invoke('getSessions'),
   createSession: (name: string) => ipcRenderer.invoke('createSession', name),
   deleteSession: (id: string) => ipcRenderer.invoke('deleteSession', id),
-  getMessages: (sessionId: string) => ipcRenderer.invoke('getMessages', sessionId),
-  addMessage: (sessionId: string, message: any) => ipcRenderer.invoke('addMessage', sessionId, message),
-  getAvailableModels: () => ipcRenderer.invoke('getAvailableModels'),
-  generate: (sessionId: string, model: string, prompt: string) => ipcRenderer.invoke('generate', sessionId, model, prompt),
-});
-*/
-contextBridge.exposeInMainWorld('api', {
-  getSessions: () => ipcRenderer.invoke('getSessions'),
-  createSession: (name: string) => ipcRenderer.invoke('createSession', name),
-  deleteSession: (id: string) => ipcRenderer.invoke('deleteSession', id),
+  renameSession: (id: string, newName: string) => ipcRenderer.invoke('renameSession', id, newName),
   getMessages: (sessionId: string) => ipcRenderer.invoke('getMessages', sessionId),
   addMessage: (sessionId: string, message: any) => ipcRenderer.invoke('addMessage', sessionId, message),
   getAvailableModels: () => ipcRenderer.invoke('getAvailableModels'),

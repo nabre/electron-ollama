@@ -123,6 +123,17 @@ ipcMain.handle('createSession', (event, sessionName: string) => {
   return newSession;
 });
 
+ipcMain.handle('renameSession', async (event, id: string, newName: string) => {
+  const sessions = store.get('sessions', []) as Session[];
+  const sessionIndex = sessions.findIndex(s => s.id === id);
+  if (sessionIndex !== -1) {
+    sessions[sessionIndex].name = newName;
+    store.set('sessions', sessions);
+    return sessions[sessionIndex];
+  }
+  throw new Error('Session not found');
+});
+
 ipcMain.handle('deleteSession', (event, sessionId: string) => {
   deleteSession(sessionId);
 });
@@ -155,6 +166,31 @@ ipcMain.handle('getAvailableModels', async () => {
 
 ipcMain.handle('generate', async (event, sessionId: string, model: string, prompt: string) => {
   try {
+    const session = getSessions().find(s => s.id === sessionId);
+    if (!session) {
+      throw new Error('Sessione non trovata');
+    }
+
+    // Costruisci il contesto dai messaggi precedenti
+    const context = session.messages.map(msg => `${msg.sender === 'user' ? 'Human' : 'Assistant'}: ${msg.text}`).join('\n');
+    const fullPrompt = `${context}\nHuman: ${prompt}\nAssistant:`;
+
+    const response = await ollama.generate({
+      model: model,
+      prompt: fullPrompt,
+      stream: false
+    });
+
+    return response.response;
+  } catch (error) {
+    console.error('Errore nella generazione della risposta:', error);
+    return null;
+  }
+});
+
+/*
+ipcMain.handle('generate', async (event, sessionId: string, model: string, prompt: string) => {
+  try {
     const response = await ollama.generate({
       model: model,
       prompt: prompt
@@ -164,7 +200,7 @@ ipcMain.handle('generate', async (event, sessionId: string, model: string, promp
     console.error('Errore nella generazione della risposta:', error);
     return null;
   }
-});
+});*/
 
 const checkOllamaStatus = async () => {
   exec('ollama --version', (error, stdout, stderr) => {

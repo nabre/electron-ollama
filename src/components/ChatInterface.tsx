@@ -1,20 +1,8 @@
 import  { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { User, Bot, ChevronDown } from 'lucide-react';
+import { User, Bot } from 'lucide-react';
+import { Message, Session } from '../types';
 
-interface Message {
-  id: number;
-  text: string;
-  sender: 'user' | 'ollama' | 'loading';
-  timestamp: string;
-  model: string;
-}
-
-interface Session {
-  id: string;
-  name: string;
-  messages: Message[];
-}
 
 interface ChatInterfaceProps {
   currentSession: Session | null;
@@ -31,7 +19,7 @@ function ChatInterface({ currentSession, sendMessage, getAvailableModels }: Chat
 
   useEffect(() => {
     if (currentSession) {
-      loadMessages();
+      setMessages(currentSession.messages);
     } else {
       setMessages([]);
     }
@@ -48,15 +36,49 @@ function ChatInterface({ currentSession, sendMessage, getAvailableModels }: Chat
     }
   };
 
+
   const handleSendMessage = async () => {
     if (input.trim() && currentSession && selectedModel) {
-      setIsLoading(true);
-      const response = await sendMessage(input, selectedModel);
+      const userMessage: Message = {
+        id: Date.now(),
+        text: input,
+        sender: 'user',
+        timestamp: new Date().toISOString(),
+        model: selectedModel
+      };
+      const loadingMessage: Message = {
+        id: Date.now() + 1,
+        text: '',
+        sender: 'loading',
+        timestamp: new Date().toISOString(),
+        model: selectedModel
+      };
+      setMessages(prev => [...prev, userMessage, loadingMessage]);
       setInput('');
-      await loadMessages(); // Ricarica i messaggi dopo l'invio
-      setIsLoading(false);
+      setIsLoading(true);
+
+      try {
+        const response = await sendMessage(currentSession.id, input, selectedModel);
+        if (response) {
+          const ollamaMessage: Message = {
+            id: Date.now() + 2,
+            text: response,
+            sender: 'ollama',
+            timestamp: new Date().toISOString(),
+            model: selectedModel
+          };
+          setMessages(prev => [...prev.filter(m => m.sender !== 'loading'), ollamaMessage]);
+        }
+      } catch (error) {
+        console.error('Errore nell\'invio del messaggio:', error);
+        setMessages(prev => prev.filter(m => m.sender !== 'loading'));
+        // Gestisci l'errore, magari mostrando un messaggio all'utente
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
+
 
   const LoadingIndicator = () => (
     <div className="flex items-center space-x-2">
@@ -136,8 +158,7 @@ function ChatInterface({ currentSession, sendMessage, getAvailableModels }: Chat
         {messages.map(renderMessage)}
         <div ref={messagesEndRef} />
       </div>
-      <div className="flex items-center space-x-2">
-        
+      <div className="flex items-center space-x-2">        
         <input
           type="text"
           value={input}

@@ -1,27 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import SessionManager from './SessionManager';
 import ChatInterface from './ChatInterface';
-import OllamaCheck from './OllamaCheck';
-import { Session, Message, OllamaStatus } from './types';
+import { Session } from '../types';
+
+const showErrorNotification = (message: string, ...props: any[]) => {
+  // Implementa questa funzione utilizzando il sistema di notifiche della tua scelta
+  // Ad esempio, potresti usare react-toastify o un componente personalizzato
+  console.error(message,...props); // Placeholder, sostituisci con una vera implementazione
+};
+
+const isValidSessionName = (name: string, existingSessions: Session[]): boolean => {
+  if (name.trim().length === 0) return false;
+  if (existingSessions.some(session => session.name.toLowerCase() === name.toLowerCase())) return false;
+  return true;
+};
 
 function OllamaInterface() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
-  const [ollamaStatus, setOllamaStatus] = useState<OllamaStatus>({ status: 'inactive' });
 
   useEffect(() => {
+    // Carica le sessioni iniziali
     loadSessions();
-    window.api.checkOllamaStatus();
-
-    const handleOllamaStatus = (status: OllamaStatus) => {
-      setOllamaStatus(status);
-    };
-
-    window.api.onOllamaStatus(handleOllamaStatus);
-
-    return () => {
-      window.api.removeOllamaStatusListener();
-    };
   }, []);
 
   const loadSessions = async () => {
@@ -29,73 +29,52 @@ function OllamaInterface() {
     setSessions(loadedSessions);
   };
 
-  const handleCreateSession = async (sessionName: string) => {
-    const newSession = await window.api.createSession(sessionName);
+  const handleCreateSession = async (name: string) => {
+    if (!isValidSessionName(name, sessions)) {
+      showErrorNotification('Nome sessione non valido o già esistente.');
+      return;
+    }
+    const newSession = await window.api.createSession(name);
     setSessions([...sessions, newSession]);
     setCurrentSession(newSession);
   };
 
-  const handleDeleteSession = async (sessionId: string) => {
-    await window.api.deleteSession(sessionId);
-    setSessions(sessions.filter(s => s.id !== sessionId));
-    if (currentSession && currentSession.id === sessionId) {
+  const handleRenameSession = async (id: string, newName: string) => {
+    if (!isValidSessionName(newName, sessions.filter(s => s.id !== id))) {
+      showErrorNotification('Nome sessione non valido o già esistente.');
+      return;
+    }
+
+    try {
+      const updatedSession = await window.api.renameSession(id, newName);
+      setSessions(sessions.map(s => s.id === id ? updatedSession : s));
+      if (currentSession && currentSession.id === id) {
+        setCurrentSession(updatedSession);
+      }
+    } catch (error) {
+      showErrorNotification('Impossibile rinominare la sessione:', error);
+    }
+  };
+
+  const handleDeleteSession = async (id: string) => {
+    await window.api.deleteSession(id);
+    setSessions(sessions.filter(s => s.id !== id));
+    if (currentSession && currentSession.id === id) {
       setCurrentSession(null);
     }
   };
 
-  const handleSendMessage = async (message: string, model: string) => {
-    if (currentSession) {
-      const newMessage: Message = {
-        id: Date.now(),
-        text: message,
-        sender: 'user',
-        timestamp: new Date().toISOString(),
-        model: model
-      };
-      await window.api.addMessage(currentSession.id, newMessage);
-      const response = await window.api.generate(currentSession.id, model, message);
-      if (response) {
-        const ollamaMessage: Message = {
-          id: Date.now() + 1,
-          text: response,
-          sender: 'ollama',
-          timestamp: new Date().toISOString(),
-          model: model
-        };
-        await window.api.addMessage(currentSession.id, ollamaMessage);
-      }
-      return response;
-    }
-  };
-
-  const handleInstallOllama = () => {
-    window.api.installOllama();
-  };
-
   return (
-    <div className="flex flex-col h-screen bg-gray-100">
-      <div className="p-4 bg-white shadow-md">
-        <OllamaCheck
-          status={ollamaStatus.status}
-          version={ollamaStatus.version}
-          onInstall={handleInstallOllama}
-        />
-      </div>
-      <div className='flex overflow-auto grow'>
+    <div className='flex h-screen'>
       <SessionManager
         sessions={sessions}
         currentSession={currentSession}
         setCurrentSession={setCurrentSession}
         onCreateSession={handleCreateSession}
         onDeleteSession={handleDeleteSession}
+        onRenameSession={handleRenameSession}
       />
-      <ChatInterface
-        currentSession={currentSession}
-        sendMessage={handleSendMessage}
-        getAvailableModels={window.api.getAvailableModels}
-      />        
-      </div>
-
+      <ChatInterface currentSession={currentSession} />
     </div>
   );
 }
